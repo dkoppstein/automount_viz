@@ -7,6 +7,7 @@ import subprocess as sp
 from io import BytesIO
 import re
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import networkx as nx
 
 
@@ -90,6 +91,7 @@ def nx_graph_from_automount(df, outfile, sinfo=None):
 
     server_labels = {}
     mount_labels = {}
+    legend = {}
 
     for __, row in df.iterrows():
         graph.add_node(row['SERVER'], type='server', partition=None)
@@ -112,13 +114,15 @@ def nx_graph_from_automount(df, outfile, sinfo=None):
 
     # mount dirs are blue
     nx.draw_networkx_nodes(graph, pos, list(df['MOUNT_DIR']), node_color="tab:blue", node_size=3600)
-
+    legend['tab:blue'] = 'Mount Directory'
 
     if sinfo is not None:
         nx.draw_networkx_nodes(graph, pos, list(sinfo['NODE']), node_color='tab:green', node_size=7200)
+    legend['tab:green'] = 'Compute Node (exclusively)'
 
     # servers are red
     nx.draw_networkx_nodes(graph, pos, list(df['SERVER']), node_color='tab:red', node_size=7200)
+    legend['tab:red'] = 'File Server'
 
     # graph edges are sweet
     nx.draw_networkx_edges(graph, pos, edge_color="grey")
@@ -131,6 +135,8 @@ def nx_graph_from_automount(df, outfile, sinfo=None):
     plt.axis("off")
     fig = plt.gcf()
     fig.set_size_inches(30, 30)
+    
+    ax.legend(handles=list(mpatches.Patch(color=k, label=v) for k, v in legend.items()))
     #plt.tight_layout()
     plt.show()
     plt.savefig(outfile, dpi=600)
