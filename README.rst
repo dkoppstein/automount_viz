@@ -20,15 +20,7 @@ Networkx-based visualization of a networked AutoFS system.
 
 
 * Free software: MIT license
-* Documentation: https://automount-viz.readthedocs.io.
 
-
-Features
---------
-
-* TODO
-
-Credits
 -------
 
 This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
