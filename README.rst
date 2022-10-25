@@ -18,6 +18,14 @@ automount-viz
 
 Networkx-based visualization of a networked AutoFS system. 
 
+Usage: 
+
+```
+conda env create -f environment.yaml
+conda activate automount_viz
+pip install -e .
+automount_viz
+```
 
 * Free software: MIT license
 
