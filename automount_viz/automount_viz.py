@@ -11,6 +11,9 @@ import matplotlib.patches as mpatches
 import networkx as nx
 
 
+SSH_COMMAND_TEMPLATE = 'ssh {server} "{cmd}"'
+
+
 def parse_automount_file(fname):
     "Parses the file in /etc/automount into a pandas DataFrame. "
     "Tries to guess which is the server:/path/to/mount string since this apparently "
@@ -85,7 +88,21 @@ def expand_nodes(s):
             final_nums.append(int(num_range))
     return [prefix + str(num) for num in final_nums]
 
-def nx_graph_from_automount(df, outfile, sinfo=None):
+def get_percent_usage(dname, ssh_server=None):
+    try:
+        cmd = 'df -h {}'.format(dname)
+        final_cmd = SSH_COMMAND_TEMPLATE.format(server=ssh_server, cmd=cmd) if ssh_server else cmd 
+        df_h = sp.check_output(final_cmd, shell=True)
+        df = pd.read_csv(BytesIO(df_h), encoding="utf-8", delim_whitespace=True, header=0)
+        ans_str = df.iloc[0]['Use%'].rstrip('%')
+        if ans_str == '-':
+            return 'unknown'
+        else:
+            return int(df.iloc[0]['Use%'].rstrip('%')) / 100.
+    except sp.CalledProcessError: 
+        return 'unknown'
+
+def nx_graph_from_automount(df, outfile, sinfo=None, disk_usage=False, ssh_server=None):
     "sinfo is optional sinfo cmd"
     graph = nx.Graph()
 
@@ -94,13 +111,14 @@ def nx_graph_from_automount(df, outfile, sinfo=None):
     legend = {}
 
     for __, row in df.iterrows():
+        mount_perc = get_percent_usage(row['MOUNT_DIR'], ssh_server=ssh_server) if disk_usage else ""
         graph.add_node(row['SERVER'], type='server', partition=None)
-        graph.add_node(row['MOUNT_DIR'], type='mount', partition=None)
+        graph.add_node(row['MOUNT_DIR'], type='mount', partition=None, perc=mount_perc)
         graph.add_edge(row['SERVER'], row['MOUNT_DIR'])
         server_labels[row['SERVER']] = row['SERVER']
-        mount_labels[row['MOUNT_DIR']] = (row['MOUNT_DIR'] + '\n' + row['SERVER'])
+        mount_labels[row['MOUNT_DIR']] = \
+            '\n'.join([row['MOUNT_DIR'], row['SERVER'], "Disk usage: " + str(mount_perc)])
 
-    # nodes 
     if sinfo:
         sinfo = parse_sinfo(sinfo)
         for __, row in sinfo.iterrows():
@@ -113,7 +131,11 @@ def nx_graph_from_automount(df, outfile, sinfo=None):
     pos = nx.spring_layout(graph, k=0.99, iterations=25)
 
     # mount dirs are blue
-    nx.draw_networkx_nodes(graph, pos, list(df['MOUNT_DIR']), node_color="tab:blue", node_size=3600)
+    for mount_dir in df['MOUNT_DIR']:
+        alpha = nx.get_node_attributes(graph, 'perc')[mount_dir]
+        if type(alpha) is str: 
+            alpha = 1
+        nx.draw_networkx_nodes(graph, pos, [mount_dir], node_color="tab:blue", alpha=alpha, node_size=3600)
     legend['tab:blue'] = 'Mount Directory'
 
     if sinfo is not None:
@@ -127,9 +149,9 @@ def nx_graph_from_automount(df, outfile, sinfo=None):
     # graph edges are sweet
     nx.draw_networkx_edges(graph, pos, edge_color="grey")
 
-    # and so are you 
+    # let's end this /thread
     nx.draw_networkx_labels(graph, pos, server_labels, font_size=18, font_color="whitesmoke")
-    nx.draw_networkx_labels(graph, pos, mount_labels, font_size=5, font_color="whitesmoke")
+    nx.draw_networkx_labels(graph, pos, mount_labels, font_size=5, font_color="black")
 
     ax = plt.gca()
     plt.axis("off")
